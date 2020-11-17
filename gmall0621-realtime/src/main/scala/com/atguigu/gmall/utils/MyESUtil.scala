@@ -31,9 +31,8 @@ object MyESUtil {
 
   //向ES中插入数据
   def putIndex(): Unit ={
-    //建立连接
     val jest: JestClient = getClient
-    //Builder中的参数，底层会转换为Json格式字符串，所以我们这里封装Document为样例类
+    //Builder中的参数，底层会转换为Json格式字符串，所以我们这里封装Document为样例类Movie
     //当然也可以直接传递json
     val actorNameList = new util.ArrayList[String]()
     actorNameList.add("zhangsan")
@@ -52,7 +51,6 @@ object MyESUtil {
 
   //从ES中查询数据
   def queryIndex(): Unit ={
-    //获取操作对象
     val jest: JestClient = getClient
 
     //查询常用有两个实现类 Get通过id获取单个Document，以及Search处理复杂查询
@@ -101,7 +99,7 @@ object MyESUtil {
     //获取Hit中的source部分
     val list: List[util.Map[String, Any]] = rsList.asScala.map(_.source).toList
     println(list.mkString("\n"))
-    //关闭连接
+
     jest.close()
   }
 
