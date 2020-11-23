@@ -25,16 +25,17 @@ object MyESUtil {
       .connTimeout(10000).readTimeout(1000).build())
   }
 
-  def bulkInsert(sourceList: List[Any], indexName: String): Unit = {
+  def bulkInsert(sourceList: List[(String, Any)], indexName: String): Unit = {
     if (sourceList != null && sourceList.size > 0) {
       val jestClient: JestClient = getClient
       //创建批量操作对象
       val builder: Bulk.Builder = new Bulk.Builder()
       //添加批量操作
-      for (source <- sourceList) {
+      for ((id, source) <- sourceList) {
         val index: Index = new Index.Builder(source)
           .index(indexName)
           .`type`("_doc")
+          .id(id)
           .build()
         builder.addAction(index)
       }

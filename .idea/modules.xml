@@ -2,7 +2,9 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
+      <module fileurl="file://$PROJECT_DIR$/dw-chart/dw-chart.iml" filepath="$PROJECT_DIR$/dw-chart/dw-chart.iml" />
       <module fileurl="file://$PROJECT_DIR$/gmall0621-logger/gmall0621-logger.iml" filepath="$PROJECT_DIR$/gmall0621-logger/gmall0621-logger.iml" />
+      <module fileurl="file://$PROJECT_DIR$/gmall0621-publisher/gmall0621-publisher.iml" filepath="$PROJECT_DIR$/gmall0621-publisher/gmall0621-publisher.iml" />
       <module fileurl="file://$PROJECT_DIR$/gmall0621-realtime/gmall0621-realtime.iml" filepath="$PROJECT_DIR$/gmall0621-realtime/gmall0621-realtime.iml" />
     </modules>
   </component>

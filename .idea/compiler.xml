@@ -8,17 +8,22 @@
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <module name="gmall0621-realtime" />
+        <module name="dw-chart" />
+        <module name="gmall0621-publisher" />
         <module name="gmall0621-logger" />
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
+      <module name="dw-chart" target="1.8" />
       <module name="gmall0621-logger" target="1.8" />
+      <module name="gmall0621-publisher" target="1.8" />
       <module name="gmall0621-realtime" target="1.8" />
     </bytecodeTargetLevel>
   </component>
   <component name="JavacSettings">
     <option name="ADDITIONAL_OPTIONS_OVERRIDE">
       <module name="gmall0621-logger" options="-parameters" />
+      <module name="gmall0621-publisher" options="-parameters" />
     </option>
   </component>
 </project>

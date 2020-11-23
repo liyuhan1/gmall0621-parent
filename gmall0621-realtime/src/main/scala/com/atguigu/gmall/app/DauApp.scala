@@ -5,10 +5,12 @@ import java.util.Date
 
 import com.alibaba.fastjson.{JSON, JSONObject}
 import com.atguigu.gmall.bean.DauInfo
-import com.atguigu.gmall.utils.{MyESUtil, MyKafkaUtil, MyRedisUtil}
+import com.atguigu.gmall.utils.{MyESUtil, MyKafkaUtil, MyRedisUtil, OffsetManagerUtil}
 import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.apache.kafka.common.TopicPartition
 import org.apache.spark.SparkConf
 import org.apache.spark.streaming.dstream.{DStream, InputDStream}
+import org.apache.spark.streaming.kafka010.{HasOffsetRanges, OffsetRange}
 import org.apache.spark.streaming.{Seconds, StreamingContext}
 import redis.clients.jedis.Jedis
 
@@ -22,11 +24,33 @@ object DauApp {
     val topic = "gmall_start_0621"
     val groupId = "dau_app_group"
 
+    //从Redis中读取Kafka偏移量
+    val kafkaOffsetMap: Map[TopicPartition, Long] = OffsetManagerUtil.getOffset(topic, groupId)
+    var recordDstream: InputDStream[ConsumerRecord[String, String]] = null
+    if (kafkaOffsetMap != null && kafkaOffsetMap.size > 0) {
+      //Redis中有偏移量  根据Redis中保存的偏移量读取
+      recordDstream = MyKafkaUtil.getKafkaStream(topic, ssc, kafkaOffsetMap, groupId)
+    } else {
+      // Redis中没有保存偏移量  Kafka默认从最新读取
+      recordDstream = MyKafkaUtil.getKafkaStream(topic, ssc, groupId)
+    }
+
+    //得到本批次中处理数据的分区对应的偏移量起始及结束位置
+    // 注意：这里我们从Kafka中读取数据之后，直接就获取了偏移量的位置，因为KafkaRDD可以转换为HasOffsetRanges，会自动记录位置
+    var offsetRanges: Array[OffsetRange] = Array.empty[OffsetRange]
+    val offsetDStream: DStream[ConsumerRecord[String, String]] = recordDstream.transform {
+      rdd => {
+        offsetRanges = rdd.asInstanceOf[HasOffsetRanges].offsetRanges
+        println(offsetRanges(0).untilOffset + "*****")
+        rdd
+      }
+    }
+
     //从Kafka的gmall_start_0621主题中读取数据
-    val inputStream: InputDStream[ConsumerRecord[String, String]] = MyKafkaUtil.getKafkaStream(topic, ssc, groupId)
+    //val inputStream: InputDStream[ConsumerRecord[String, String]] = MyKafkaUtil.getKafkaStream(topic, ssc, groupId)
 
     //ConsumerRecord====>JsonObj
-    val jsonObjDStream: DStream[JSONObject] = inputStream.map {
+    val jsonObjDStream: DStream[JSONObject] = offsetDStream.map {
       record => {
         //获取json格式字符串
         val jsonStr: String = record.value()
@@ -84,11 +108,11 @@ object DauApp {
         //以分区为单位对RDD中的数据进行处理
         rdd.foreachPartition {
           jsonObjItr => {
-            val dauList: List[DauInfo] = jsonObjItr.map {
+            val dauList: List[(String, DauInfo)] = jsonObjItr.map {
               jsonObj => {
                 //将json对象转换为样例类对象
                 val commonObj: JSONObject = jsonObj.getJSONObject("common")
-                DauInfo(
+                val dauInfo = DauInfo(
                   commonObj.getString("mid"),
                   commonObj.getString("uid"),
                   commonObj.getString("ar"),
@@ -99,6 +123,7 @@ object DauApp {
                   "00",
                   jsonObj.getLong("ts")
                 )
+                (dauInfo.mid, dauInfo)
               }
             }.toList
             //将当前分区的数据批量的保存到ES中
@@ -107,6 +132,8 @@ object DauApp {
 
           }
         }
+        //在保存最后提交偏移量
+        OffsetManagerUtil.saveOffset(topic, groupId, offsetRanges)
       }
     }
     ssc.start()
