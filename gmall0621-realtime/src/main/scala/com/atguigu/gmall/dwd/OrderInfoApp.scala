@@ -1,8 +1,12 @@
 package com.atguigu.gmall.dwd
 
+import java.text.SimpleDateFormat
+import java.util.Date
+
+import com.alibaba.fastjson.serializer.SerializeConfig
 import com.alibaba.fastjson.{JSON, JSONObject}
-import com.atguigu.gmall.bean.{OrderInfo, ProvinceInfo, UserStatus}
-import com.atguigu.gmall.utils.{MyKafkaUtil, OffsetManagerUtil, PhoenixUtil}
+import com.atguigu.gmall.bean.{OrderInfo, ProvinceInfo, UserInfo, UserStatus}
+import com.atguigu.gmall.utils.{MyESUtil, MyKafkaSink, MyKafkaUtil, OffsetManagerUtil, PhoenixUtil}
 import org.apache.hadoop.conf.Configuration
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
@@ -210,14 +214,60 @@ object OrderInfoApp {
       }
     }
 
-    orderInfoWithProvinceDStream.print(1000)
+    //orderInfoWithProvinceDStream.print(1000)
 
 
-    //===============3.保存用户状态=================
+    //===============6.订单和用户维度进行关联================
+    //以分区为单位进行处理
+    val orderInfoWithUserInfoDStream: DStream[OrderInfo] = orderInfoWithProvinceDStream.mapPartitions {
+      orderInfoItr => {
+        val orderInfoList: List[OrderInfo] = orderInfoItr.toList
+        //获取当前分区订单对应的所有下单用户id
+        val userIdList: List[Long] = orderInfoList.map(_.user_id)
+        //拼接查询sql
+        var sql: String = s"select id,user_level,birthday,gender,age_group,gender_name from gmall0621_user_info where id in('${userIdList.mkString("','")}')"
+        //执行查询操作，到Phoenix中的用户表中获取数据
+        val userJsonObjList: List[JSONObject] = PhoenixUtil.queryList(sql)
+        //将List集合转换为map,并且将json对象转换为用户样例类对象
+        val userMap: Map[String, UserInfo] = userJsonObjList.map {
+          userJsonObj => {
+            val userInfo: UserInfo = JSON.toJavaObject(userJsonObj, classOf[UserInfo])
+            (userInfo.id, userInfo)
+          }
+        }.toMap
+
+        for (orderInfo <- orderInfoList) {
+          val userInfo: UserInfo = userMap.getOrElse(orderInfo.user_id.toString, null)
+          if (userInfo != null) {
+            orderInfo.user_gender = userInfo.gender_name
+            //把生日转成年龄
+            val formattor = new SimpleDateFormat("yyyy-MM-dd")
+            val date: Date = formattor.parse(userInfo.birthday)
+            val curTs: Long = System.currentTimeMillis()
+            val betweenMs = curTs - date.getTime
+            val age = betweenMs / 1000L / 60L / 60L / 24L / 365L
+            if (age < 20) {
+              userInfo.age_group = "20岁及以下"
+            } else if (age > 30) {
+              userInfo.age_group = "30岁以上"
+            } else {
+              userInfo.age_group = "21岁到30岁"
+            }
+            orderInfo.user_age_group = userInfo.age_group
+          }
+        }
+        orderInfoList.toIterator
+      }
+    }
+    //orderInfoWithUserInfoDStream.print(1000)
+
+
+    //===============3.保存=================
     //导入类下成员
     import org.apache.phoenix.spark._
-    orderInfoRealWithFirstFlagDStream.foreachRDD {
+    orderInfoWithUserInfoDStream.foreachRDD {
       rdd => {
+        rdd.cache()
         //从所有订单中，将首单的订单过滤出来
         val firstOrderRDD: RDD[OrderInfo] = rdd.filter(_.if_first_order == "1")
         //获取当前订单用户并更新到Hbase，注意：saveToPhoenix在更新的时候，要求rdd中的属性和插入hbase表中的列必须保持一致，所以转换一下
@@ -230,6 +280,21 @@ object OrderInfoApp {
           new Configuration,
           Some("hadoop102,hadoop103,hadoop104:2181")
         )
+        //保存
+        rdd.foreachPartition {
+          orderInfoItr => {
+            val orderInfoList: List[(String, OrderInfo)] = orderInfoItr.toList.map(orderInfo => (orderInfo.id.toString, orderInfo))
+            //保存到es
+            /*val dateStr: String = new SimpleDateFormat("yyyyMMdd").format(new Date())
+            MyESUtil.bulkInsert(orderInfoList, "gmall0621_order_info_" + dateStr)*/
+
+            //3.3将订单数据保存到Kafka的dwd_order_info
+            for ((_, orderInfo) <- orderInfoList) {
+              MyKafkaSink.send("dwd_order_info", JSON.toJSONString(orderInfo, new SerializeConfig(true)))
+            }
+          }
+        }
+
         //保存偏移量到Redis
         OffsetManagerUtil.saveOffset(topic, groupId, offsetRanges)
       }
