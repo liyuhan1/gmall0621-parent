@@ -26,7 +26,7 @@ public class ClickHouseServiceImpl implements ClickHouseService {
         List<Map> mapList = orderWideMapper.selectOrderAmountHourMap(date);
         Map<String, BigDecimal> orderAmountHourMap = new HashMap();
         for (Map map : mapList) {
-            orderAmountHourMap.put(String.format("%02d", map.get("hr")), (BigDecimal) map.get("am"));
+            orderAmountHourMap.put(String.format("%03d", map.get("hr")), (BigDecimal) map.get("am"));
         }
         return orderAmountHourMap;
     }
