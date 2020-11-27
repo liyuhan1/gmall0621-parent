@@ -1,5 +1,6 @@
 package com.atguigu.gmall.controller;
 
+import com.atguigu.gmall.service.ClickHouseService;
 import com.atguigu.gmall.service.ESService;
 import org.apache.commons.lang3.time.DateUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -8,6 +9,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.math.BigDecimal;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
@@ -16,6 +18,9 @@ public class PublisherController {
 
     @Autowired
     private ESService esService;
+    @Autowired
+    private ClickHouseService clickHouseService;
+
 
     @GetMapping("realtime-total")
     public Object realtimeTotal(String date) {
@@ -38,24 +43,42 @@ public class PublisherController {
         newMidMap.put("name", "新增设备");
         newMidMap.put("value", 2333);
         rsList.add(newMidMap);
+
+        //新增交易额
+        Map<String,Object> orderAmountMap = new HashMap();
+        orderAmountMap.put("id","order_amount");
+        orderAmountMap.put("name","新增交易额");
+        orderAmountMap.put("value", clickHouseService.getOrderAmount(date));
+
+        rsList.add(orderAmountMap);
+
+
+
         return rsList;
     }
 
     @RequestMapping("realtime-hour")
     public Object realtimeHour(@RequestParam(value = "id", defaultValue = "-1") String id, @RequestParam("date") String date) {
-        Map<String, Map> hourMap = new HashMap<>();
+        Map<String, Map> resultMap = new HashMap<>();
+        //获取昨天日期
+        String yd = getYd(date);
         if ("dau".equals(id)) {
             //封装返回的数据
             //获取今天日活分时
             Map dauHourTdMap = esService.getDauHour(date);
-            hourMap.put("today", dauHourTdMap);
-            //获取昨天日期
-            String yd = getYd(date);
+            resultMap.put("today", dauHourTdMap);
             //获取昨天日活分时
             Map dauHourYdMap = esService.getDauHour(yd);
-            hourMap.put("yesterday", dauHourYdMap);
+            resultMap.put("yesterday", dauHourYdMap);
+        }else if("order_amount".equals(id)){
+            Map orderAmountHourMapTD = clickHouseService.getOrderAmountHour(date);
+            Map orderAmountHourMapYD = clickHouseService.getOrderAmountHour(yd);
+
+            resultMap.put("yesterday",orderAmountHourMapYD);
+            resultMap.put("today",orderAmountHourMapTD);
         }
-        return hourMap;
+
+        return resultMap;
     }
 
     private String getYd(String td) {
