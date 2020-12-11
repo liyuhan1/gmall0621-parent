@@ -305,5 +305,14 @@
     <orderEntry type="library" name="Maven: net.jpountz.lz4:lz4:1.3.0" level="project" />
     <orderEntry type="library" name="Maven: com.google.guava:guava:19.0" level="project" />
     <orderEntry type="library" name="Maven: javax.xml.bind:jaxb-api:2.3.0" level="project" />
+    <orderEntry type="library" name="Maven: org.scalikejdbc:scalikejdbc_2.12:3.4.0" level="project" />
+    <orderEntry type="library" name="Maven: org.scalikejdbc:scalikejdbc-core_2.12:3.4.0" level="project" />
+    <orderEntry type="library" name="Maven: org.apache.commons:commons-dbcp2:2.7.0" level="project" />
+    <orderEntry type="library" name="Maven: org.scala-lang.modules:scala-collection-compat_2.12:2.1.2" level="project" />
+    <orderEntry type="library" name="Maven: org.scalikejdbc:scalikejdbc-interpolation_2.12:3.4.0" level="project" />
+    <orderEntry type="library" name="Maven: org.scalikejdbc:scalikejdbc-interpolation-macro_2.12:3.4.0" level="project" />
+    <orderEntry type="library" name="Maven: org.scalikejdbc:scalikejdbc-config_2.12:3.4.0" level="project" />
+    <orderEntry type="library" name="Maven: com.typesafe:config:1.4.0" level="project" />
+    <orderEntry type="library" name="Maven: mysql:mysql-connector-java:5.1.47" level="project" />
   </component>
 </module>

@@ -3,8 +3,9 @@ package com.atguigu.gmall.dws
 import java.util.Properties
 
 import com.alibaba.fastjson.JSON
+import com.alibaba.fastjson.serializer.SerializeConfig
 import com.atguigu.gmall.bean.{OrderDetail, OrderInfo, OrderWide}
-import com.atguigu.gmall.utils.{MyKafkaUtil, MyRedisUtil, OffsetManagerUtil}
+import com.atguigu.gmall.utils.{MyKafkaSink, MyKafkaUtil, MyRedisUtil, OffsetManagerUtil}
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.spark.SparkConf
@@ -184,11 +185,13 @@ object OrderWideApp {
     }
     //    splitOrderWideDStream.print(1000)
 
-    //将数据保存到ClickHouse
+
     val spark: SparkSession = SparkSession.builder().appName("create_spark_session").getOrCreate()
     import spark.implicits._
     splitOrderWideDStream.foreachRDD {
       rdd => {
+        rdd.cache()
+        //将数据保存到ClickHouse
         rdd.toDF().write
           .mode(SaveMode.Append)
           .option("batchsize", "100")
@@ -196,7 +199,12 @@ object OrderWideApp {
           .option("numPartitions", "4") // 设置并发
           .option("driver", "ru.yandex.clickhouse.ClickHouseDriver")
           .jdbc("jdbc:clickhouse://hadoop102:8123/default", "t_order_wide_0621", new Properties())
-
+        //将数据写回到kafka
+        rdd.foreach {
+          orderWide => {
+            MyKafkaSink.send("dws_order_wide", JSON.toJSONString(orderWide, new SerializeConfig(true)))
+          }
+        }
         //提交偏移量
         OffsetManagerUtil.saveOffset(orderInfoTopic, orderInfoGroupId, orderInfoOffsetRanges)
         OffsetManagerUtil.saveOffset(orderDetailTopic, orderDetailGroupId, orderDetailOffsetRanges)
